@@ -1,4 +1,8 @@
-use std::collections::{HashMap, HashSet};
+#![feature(iter_array_chunks)]
+
+use std::collections::BTreeMap;
+use std::ops::Bound::{Included, Unbounded};
+use std::ops::Range;
 
 pub fn main() {
     let input: Vec<_> = include_str!("part1.data").lines().collect();
@@ -7,32 +11,101 @@ pub fn main() {
 }
 
 fn solve(input: Vec<&str>) -> String {
-    let mut count_map: HashMap<usize, usize> = HashMap::new();
-    let result = input
-        .iter()
-        .filter_map(|l| l.split_once(":"))
-        .filter_map(|(_, l)| l.split_once("|"))
-        .enumerate()
-        .map(|(id, (card, numbers))| {
-            let card: HashSet<usize> = card
-                .split(" ")
-                .filter_map(|n| n.parse::<usize>().ok())
-                .collect();
-            let winning_numbers = numbers
-                .split(" ")
-                .filter_map(|n| n.parse::<usize>().ok())
-                .filter(|n| card.contains(n))
-                .count();
-            let card_count = count_map.get(&id).copied().unwrap_or_default() + 1;
-            ((id + 1)..=(id + winning_numbers)).for_each(|n| {
-                let v = count_map.entry(n).or_default();
-                *v += card_count;
-            });
-            card_count
-        })
-        .sum::<usize>();
+    let almanac = Almanac::parse(input);
 
+    let computed_values = almanac.compute();
+
+    let result = computed_values.iter().min().expect("no computed values");
+    
     result.to_string()
+}
+
+#[derive(Debug)]
+struct Instruction {
+    dest: isize,
+    range: isize,
+}
+
+#[derive(Debug)]
+struct Almanac {
+    seeds: Vec<Range<isize>>,
+    steps: Vec<BTreeMap<isize, Instruction>>,
+}
+
+impl Almanac {
+
+    /// will compute
+    fn compute(&self) -> Vec<isize> {
+        self.seeds
+            .iter()
+            .map(|seed_range| {
+                self.steps
+                    .iter()
+                    .enumerate()
+                    .fold(0, |acc, (_, step)| {
+                        if let Some((&source, instruction)) =
+                            step.range((Unbounded, Included(acc))).last()
+                        {
+                            let result = if !(source..(source + instruction.range)).contains(&acc) {
+                                acc
+                            } else {
+                                acc + instruction.dest - source
+                            };
+                            result
+                        } else {
+                            acc
+                        }
+                    })
+            })
+            .collect()
+    }
+
+    fn parse(input: Vec<&str>) -> Self {
+        let mut iter = input.iter();
+
+        let seeds = iter
+            .next()
+            .expect("seeds not found")
+            .split_once(':')
+            .expect("seeds format is incorrect")
+            .1
+            .split(' ')
+            .filter_map(|s| s.parse::<isize>().ok())
+            .array_chunks::<2>()
+            .map(|[start, range]| {
+                start..(start+range)
+            })
+            .collect();
+
+        let mut steps: Vec<BTreeMap<isize, Instruction>> = Vec::new();
+
+        let mut iter = iter.peekable();
+
+        while let Some(_) = iter.peek() {
+            while let Some(_) = iter
+                .next_if(|l| l.is_empty() || l.chars().next().is_some_and(|c| c.is_alphabetic()))
+            {
+            }
+            let mut step: BTreeMap<isize, Instruction> = BTreeMap::new();
+            while let Some(line) = iter.next() {
+                if line.is_empty() {
+                    break;
+                }
+                let parts: Vec<isize> = line
+                    .splitn(3, ' ')
+                    .filter_map(|p| p.parse::<isize>().ok())
+                    .collect();
+                let dest = parts.get(0).copied().expect("destination not found");
+                let source = parts.get(1).copied().expect("source not found");
+                let range = parts.get(2).copied().expect("range not found");
+
+                step.insert(source, Instruction { dest, range });
+            }
+            steps.push(step);
+        }
+
+        Self { seeds, steps }
+    }
 }
 
 #[cfg(test)]
@@ -40,8 +113,8 @@ mod tests {
     use crate::solve;
 
     #[test]
-    fn part2() {
+    fn day1_part1() {
         let input: Vec<_> = include_str!("part1-test.data").lines().collect();
-        assert_eq!(solve(input), "30");
+        assert_eq!(solve(input), "13");
     }
 }
