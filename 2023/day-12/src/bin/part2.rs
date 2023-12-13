@@ -1,26 +1,37 @@
+#![feature(iter_intersperse)]
+
 use itertools::Itertools;
 
 pub fn main() {
-    let input = include_str!("part1.data").lines();
+    let input = include_str!("part1-test.data").lines();
 
     let result = input
         .map(|l| {
-            let (map, groups) = l.split_once(' ').unwrap();
-            let groups = groups
-                .split(',')
-                .filter_map(|g| g.parse::<usize>().ok())
-                .collect::<Vec<_>>();
+            let (map, groups) = process(l);
 
-            let possibilities = all_possibilities(&groups, map.len()).unwrap();
+            let possibilities = all_possibilities(&map, &groups).unwrap();
 
             possibilities
                 .iter()
-                .filter(|p| is_possible_for(p, map))
+                .filter(|p| is_possible_for(p, &map))
                 .count()
         })
         .sum::<usize>();
 
     println!("result: {}", result);
+}
+
+fn process(line: &str) -> (String, Vec<usize>) {
+    let (map, groups) = line.split_once(' ').unwrap();
+    let groups = groups
+        .split(',')
+        .filter_map(|g| g.parse::<usize>().ok())
+        .collect::<Vec<_>>();
+
+    let map = (0..5).map(|_| map.to_owned()).join("?");
+    let groups = (0..5).flat_map(|_| groups.clone()).collect();
+
+    (map, groups)
 }
 
 fn is_possible_for(possibility: &str, map: &str) -> bool {
@@ -34,7 +45,32 @@ fn is_possible_for(possibility: &str, map: &str) -> bool {
     }
 }
 
-fn all_possibilities(groups: &[usize], space: usize) -> Result<Vec<String>, String> {
+fn all_possibilities(map: &str, groups: &[usize]) -> Result<Vec<String>, String> {
+    let (known_parts, unkown_parts) = slice_into_parts(map);
+
+    println!("map : {}", map);
+    println!("known parts: {:?}", known_parts);
+    println!("unkown parts parts: {:?}", unkown_parts);
+    Ok(vec![])
+}
+
+fn slice_into_parts(map: &str) -> (Vec<Option<&str>>, Vec<usize>) {
+    let known_parts = map
+        .split('?')
+        .map(|l| if l.is_empty() { None } else { Some(l) });
+    let mut known_parts = Iterator::intersperse_with(known_parts, || None).collect::<Vec<_>>();
+    known_parts.dedup();
+
+    let unkown_parts = map
+        .split(|c| c != '?')
+        .map(|l| l.len())
+        .filter(|&l| l != 0)
+        .collect::<Vec<_>>();
+
+    (known_parts, unkown_parts)
+}
+
+fn _all_possibilities(groups: &[usize], space: usize) -> Result<Vec<String>, String> {
     check_inputs(groups, space)?;
     let empty_space = space + 1 - groups.iter().sum::<usize>() - groups.len();
 
